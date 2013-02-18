@@ -3,7 +3,6 @@ layout: post
 title: "Python magic and remote APIs"
 date: 2013-02-18 08:00
 comments: false
-published: false
 author: Jesse Keating
 categories: 
 - Python
