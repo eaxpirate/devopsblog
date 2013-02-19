@@ -3,7 +3,6 @@ layout: post
 title: "Apache Hadoop on Rackspace Private Cloud"
 date: 2013-02-19 08:00
 comments: false
-published: false
 author: Sudarshan Acharya
 categories: 
 - Private Cloud
