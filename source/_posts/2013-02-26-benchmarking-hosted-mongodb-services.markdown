@@ -42,23 +42,23 @@ YCSB works by putting a target throughput on the service, and then observing act
 This workload exercises the ability for a data store to handle high in-place updates of data. MongoDB has well known limitations in this space, because of its [locking design](http://docs.mongodb.org/manual/faq/concurrency/) that will cause contention and performance degradation at high loads.
 
 
-![](/a/2013-02-17-benchmarking-hosted-mongodb-services/session-store-throughput.png "Session Store, Throughput (Higher is better)")
+![](/a/2013-02-26-benchmarking-hosted-mongodb-services/session-store-throughput.png "Session Store, Throughput (Higher is better)")
 
 
 ObjectRocket’s system met the desired throughput to over 3,000 ops/s, and showed no signs of breaking down while MongoHQ was unable to break 1,500 ops/s. MongoLab showed the worst performance, without being able to consistently break 1,000 ops/s.
 
 Because this is a 50% write workload, the MongoDB Lock contention became a problem on all of the platforms.
 
-![](/a/2013-02-17-benchmarking-hosted-mongodb-services/session-read-latency.png "Session Store, Read Latency (lower is better)")
+![](/a/2013-02-26-benchmarking-hosted-mongodb-services/session-read-latency.png "Session Store, Read Latency (lower is better)")
 
 
 MongoLab's performance was so poor we actually needed a second, zoomed-in graph to get a fair comparison.
 
-![](/a/2013-02-17-benchmarking-hosted-mongodb-services/session-read-latency-zoomed.png "Session Store, Read Latency (lower is better)")
+![](/a/2013-02-26-benchmarking-hosted-mongodb-services/session-read-latency-zoomed.png "Session Store, Read Latency (lower is better)")
 
 ObjectRocket produced a consistent latency of 2ms regardless of target throughput. MongoHQ sustained some consistency around 20ms but MongoLab perished to over 200ms of latency under load.
 
-![](/a/2013-02-17-benchmarking-hosted-mongodb-services/session-update-latency.png "Session Store, Update Latency (lower is better)")
+![](/a/2013-02-26-benchmarking-hosted-mongodb-services/session-update-latency.png "Session Store, Update Latency (lower is better)")
 
 ObjectRocket repeated it's 2ms latency for all update operations, with both MongoLab and HQ growing to nearly 300ms.
 
@@ -67,11 +67,11 @@ ObjectRocket repeated it's 2ms latency for all update operations, with both Mong
 
 Heavy reads workloads, such as web applications like CMS's which commonly have many viewers and few updaters, are MongoDB's bread and butter. MongoDB generally provides super low latency access to your data and little CPU overhead.
 
-![](/a/2013-02-17-benchmarking-hosted-mongodb-services/heavy-reads-throughput.png "Heavy Reads, Throughput (higher is better)")
+![](/a/2013-02-26-benchmarking-hosted-mongodb-services/heavy-reads-throughput.png "Heavy Reads, Throughput (higher is better)")
 
 ObjectRocket met all target throughputs up to 10,500 ops/s and showed little signs of degradation. MongoHQ trailed off before 3,000 ops/s and MongoLab never got past 1,200 ops/s.
 
-![](/a/2013-02-17-benchmarking-hosted-mongodb-services/heavy-reads-latency.png "Heavy Reads, Latency (lower is better)")
+![](/a/2013-02-26-benchmarking-hosted-mongodb-services/heavy-reads-latency.png "Heavy Reads, Latency (lower is better)")
 
 ObjectRocket delivered consistent 2ms results until above 6,500 ops/s, past which we saw latencies increase up to 20ms. MongoHQ kept up sub-10ms performances until load grew beyond 1500 ops/s, but then quickly degraded. We observed high variability in MongoLab's performance, and under peak load MongoLab delivered read results around 430ms.
 
