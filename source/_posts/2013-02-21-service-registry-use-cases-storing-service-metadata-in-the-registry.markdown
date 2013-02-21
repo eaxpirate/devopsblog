@@ -7,6 +7,8 @@ author: Tomaz Muraus
 categories: 
 - Service Registry
 ---
+_This is a guest post from Tomaz Muras. Tomaz is a Racker and a project lead for the Rackspace Service Registry product. He is also a project chair of [Apache Libcloud](http://libcloud.apache.org/), an open-source project which deals with cloud interoperability. Before working on Service Registry he worked on the [Cloud Monitoring](http://www.rackspace.com/cloud/monitoring/) product and before joining Rackspace, he worked at [Cloudkick](https://www.cloudkick.com/) helping customers manage and monitor their infrastructure. In his free time, he loves writting code, contributing to open-source projects, advocating for software freedom, going to the gym and cycling. Be sure to check out his GitHub [page](https://github.com/Kami)._
+
 In November, we launched Service Registry into preview. You can read all about it in the blog post titled [Keep Track Of Your Services And Applications With The New Rackspace Service Registry](http://www.rackspace.com/blog/keep-track-of-your-services-and-applications-with-the-new-rackspace-service-registry/).
 
 That post describes some common use cases for Service Registry and contains information on how you can use it to make your application more highly available and responsive to changes. In this series of posts we take a deep look at some common use cases and illustrate them with code samples.
