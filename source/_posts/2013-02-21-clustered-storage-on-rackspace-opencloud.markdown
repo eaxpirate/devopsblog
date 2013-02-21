@@ -2,10 +2,23 @@
 layout: post
 title: "Clustered Storage on Rackspace Opencloud"
 date: 2013-02-21 12:45
-comments: true
+comments: false
 published: false
+author: Niko Gonzales
 categories: 
+- OpenStack
+- DRBD
+- GlusterFS
+- GFS2
+- Ubuntu
+- CentOS
+- CloudBlockStorage
+- CloudNetworks
+- Clustering
+- Corosync
+- Pacemaker
 ---
+
 ## DRBD and GFS2 or GlusterFS On Rackspace Public Cloud using Cloud Block Storage and Cloud Networks
 
 Rackspace has rolled out quite a few new products in the past 6 months - most notable among them are Cloud Block Storage and Cloud Networks. For a marketing spiel about the technologies we'll be using, see the following
