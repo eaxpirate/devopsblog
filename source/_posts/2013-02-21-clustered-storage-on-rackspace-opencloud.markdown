@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Clustered Storage on Rackspace Opencloud"
+title: "Clustered Storage on Rackspace Opencloud using Private Cloud Networks and Cloud Block Storage"
 date: 2013-02-21 12:45
 comments: false
 published: false
@@ -19,15 +19,19 @@ categories:
 - Pacemaker
 ---
 
+Rackspace has rolled out quite a few new products in the past 6 months - most notable among them are Cloud Block Storage and Cloud Networks. These technologies provide the power and flexibility that was previously non-existent in Rackspace Cloud. Administrators are now able to have private networks, attach and detach custom-sized storage volumes to their servers, and much more. In this post we'll talk about using Cloud Networks and Cloud Block Storage to build scalable, resilient application environments.
+
+<!--More-->
+
 ## DRBD and GFS2 or GlusterFS On Rackspace Public Cloud using Cloud Block Storage and Cloud Networks
 
-Rackspace has rolled out quite a few new products in the past 6 months - most notable among them are Cloud Block Storage and Cloud Networks. For a marketing spiel about the technologies we'll be using, see the following
+If you are unfamiliar with Cloud Servers, Cloud Block Storage, or Cloud Networks, see the documentation provided below to become acquainted.
 
   - [Cloud Servers](http://www.rackspace.com/cloud/servers/)
   - [Cloud Block Storage(CBS)](http://www.rackspace.com/cloud/block-storage/)
   - [Cloud Networks](http://www.rackspace.com/knowledge_center/article/getting-started-with-cloud-networks)
 
-If you aren't familiar with the API or python-novaclient, see [Getting started on NG Cloud Servers](http://docs.rackspace.com/servers/api/v2/cs-gettingstarted/content/ch_gs_getting_started_with_nova.html)
+If you aren't familiar with the API or `python-novaclient`, see [Getting started on NG Cloud Servers](http://docs.rackspace.com/servers/api/v2/cs-gettingstarted/content/ch_gs_getting_started_with_nova.html). You can also do this tutorial from the web interface, but it will likely take three times as long.
 
 In this tutorial, we're going to start off by building two servers with an interface on each of them being connected to a "Cloud Network". This network is essentially a layer 2 domain created by using a protocol called Stateles Transport Tunneling [(STT)](http://tools.ietf.org/html/draft-davie-stt-01) between hypervisors. If you have ever heard of "software defined networking", this is it as real at it gets. As a customer, you get an interface on your instance that, for all you know, is connected to its own switch fabric with your own private VLAN.
 
@@ -35,7 +39,9 @@ After creating the cloud network and putting two instances on it, we'll create a
 
 After attaching these CBS volumes to their servers, we'll use DRBD to create a replicated storage volume. If you haven't used DRBD yet, you probably have a use-case so check out their project at [drbd.org](http://www.drbd.org/). Basically it is block-level replication between servers. This technology is useful for making nearly any technology redundant. Traditionally we only see DRBD over a dedicated physical ethernet interface or bond on physical servers, but this is the cloud and we have a different model. 
 
-We will initially create a DRBD volume in a Primary/Secondary configuration, then move on to a dual-primary setup and use a distributed filesystem technology called [GFS2](http://en.wikipedia.org/wiki/GFS2). Through clevel locking this will allow us to have both of our servers mount the DRBD volume at the same time with read/write access. You could use this to create redundancy in anything from a simple web farm, to NFS server - and redundancy is what will make you successful with cloud technology. 
+We will initially create a DRBD volume in a Primary/Secondary configuration, then move on to a dual-primary setup and use a distributed filesystem technology called [GFS2](http://en.wikipedia.org/wiki/GFS2). Through clever locking this will allow us to have both of our servers mount the DRBD volume at the same time with read/write access.
+
+After GFS2 we will look at building a highly scalable GlusterFS environment on CentOS, with 4 Gluster servers in distributed replica-2 configuration, and 2 web servers accessing a Gluster volume hosted on the 4-node cluster.
 
 ### A quick overview of the steps 
 
@@ -52,60 +58,23 @@ We will initially create a DRBD volume in a Primary/Secondary configuration, the
   * Formatting the DRBD volume as a GFS2 volume
   * Mounting the volume on both servers
 
-The following steps you'll complete on your local machine. (or wherever you have python-novaclient installed)
+The following steps you'll complete on your local machine. (or wherever you have `python-novaclient` installed)
 
 ### Build your networks
 
 To create a network, use the **nova network-create** command - for example
 
     > nova network-create drbd0 172.16.16.0/24
-    +----------+--------------------------------------+
-    | Property | Value                                |
-    +----------+--------------------------------------+
-    | cidr     | 172.16.16.0/24                       |
-    | id       | 35bf07d5-f4df-4d68-9082-83f9802648b8 |
-    | label    | drbd0                                |
-    +----------+--------------------------------------+
 
 ### Build your CBS Volumes
 
 To create CBS volumes, run the **nova volume-create** command in a for-loop. For example
 
     > for i in 0 1; do nova volume-create --display-name drbd${i} 100; done
-    +---------------------+--------------------------------------+
-    | Property            | Value                                |
-    +---------------------+--------------------------------------+
-    | attachments         | []                                   |
-    | availability_zone   | nova                                 |
-    | created_at          | 2013-02-04T22:19:49.000000           |
-    | display_description | None                                 |
-    | display_name        | drbd0                                |
-    | id                  | cf5e1aae-3e96-4aa1-a69b-412c9339fac8 |
-    | metadata            | {}                                   |
-    | size                | 100                                  |
-    | snapshot_id         | None                                 |
-    | status              | available                            |
-    | volume_type         | SATA                                 |
-    +---------------------+--------------------------------------+
-    +---------------------+--------------------------------------+
-    | Property            | Value                                |
-    +---------------------+--------------------------------------+
-    | attachments         | []                                   |
-    | availability_zone   | nova                                 |
-    | created_at          | 2013-02-04T22:19:53.000000           |
-    | display_description | None                                 |
-    | display_name        | drbd1                                |
-    | id                  | 00e03044-9a3b-4c53-a558-bf8f0cd560f4 |
-    | metadata            | {}                                   |
-    | size                | 100                                  |
-    | snapshot_id         | None                                 |
-    | status              | available                            |
-    | volume_type         | SATA                                 |
-    +---------------------+--------------------------------------+
 
 ### Build your servers
 
-After building the volumes, create two servers using the **nova boot** command in a for-loop
+After building the volumes, create two servers using the `nova boot` command in a for-loop
 
     > for i in 0 1; do nova boot --image 5cebb13a-f783-4f8c-8058-c4182c724ccd \
     --nic net-id=35bf07d5-f4df-4d68-9082-83f9802648b8 \
@@ -163,7 +132,9 @@ Make sure you can communicate with the other instance on the "cloud network" - i
 
 Install the following packages on both servers
 
-    # apt-get install drbd8-utils linux-image-extra-virtual -y && reboot # again because -extra-virtual gives us a new kernel - it's required to have drbd.ko unless you want to build from source
+    # apt-get install drbd8-utils linux-image-extra-virtual -y && reboot 
+
+We reboot again because -extra-virtual gives us a new kernel - it's required to have drbd.ko unless you want to build from source
 
 ### Make a single 1GB partition on the CBS device (XVDB for server drbd0, XVDF for server drbd1)
 
@@ -190,12 +161,16 @@ Make a new partition: `Command (m for help): n`
 
 It is a primary partition: `Select (default p): p` 
 
-    Partition number (1-4, default 1): 
+Select the defaults:
+
+    Partition number (1-4, default 1):
     Using default value 1
     First sector (2048-209715199, default 2048): 
     Using default value 2048
 
 Make it 1GB: `Last sector, +sectors or +size{K,M,G} (2048-209715199, default 209715199): +1GB`
+
+You should have the following partition set up now:
     
     Command (m for help): p
     
@@ -218,7 +193,7 @@ Write the config: `Command (m for help): w`
 
 ### Edit /etc/hosts for the private network
 
-Put whatever ip addresses you were given for your nodes in both of the server's /etc/hosts. This is good form an can save you in the event of a DNS outage.
+Put whatever ip addresses you were given for your nodes in both of the server's `/etc/hosts`. This is good form an can save you in the event of a DNS outage.
 
     # cat << EOT >> /etc/hosts
     172.168.16.4 drbd0
@@ -229,11 +204,11 @@ Put whatever ip addresses you were given for your nodes in both of the server's 
 
 First off, **these configurations must be identical on each of your servers.** I recommend using a terminal multiplexer or writing them locally/uploading them to each server. 
 
-Edit `/etc/drbd.d/global_common` - in the syncer section add `rate 30M;` to it.
+Edit `/etc/drbd.d/global_common` - in the `syncer{}` section add `rate 30M;` to it.
 
 for testing purposes we can deal with the defaults.
 
-Now let's create a resource called `r0`, give it some liberal settings in `net{}` to allow for any weirdness/latency/packet loss; this is the cloud, not a private physical bonded interface - in my testing this will not work unless you have 30GB instances.
+Now let's create a resource called `r0`, give it some liberal settings in `net{}` to allow for any weirdness/latency/packet loss; this is the cloud, not a private physical bonded interface - in my testing drbd will not stay connected unless you have 30GB instances.
 
     # cat << EOT >> /etc/drbd.d/r0.res
     resource r0 {
@@ -320,7 +295,48 @@ Umount all drbd resourcse and Install all the packages on both nodes
     umount /drbd
     apt-get install apt-get install gfs2-utils gfs2-cluster cman pacemaker fence-agents resource-agents openais
 
-Configure cluster.conf and corosync.conf as such on both nodes 
+Modify the drbd resource on both servers to look something like this
+
+    resource r0 {
+            protocol C;
+            startup{ become-primary-on both; }
+            net {
+                    cram-hmac-alg sha1;
+                    shared-secret "dupersupersecret";
+                    timeout 180;
+                    ping-int 3;
+                    ping-timeout 9;
+                    allow-two-primaries;
+                    after-sb-0pri discard-zero-changes;
+                    after-sb-1pri discard-secondary;
+                    after-sb-2pri disconnect;
+            }
+            on drbd0 {
+                    device /dev/drbd0;
+                    disk /dev/xvdb1;
+                    address 172.16.16.4:7788;
+                    meta-disk internal;
+            }
+            on drbd1 {
+                    device /dev/drbd0;
+                    disk /dev/xvdf1;
+                    address 172.16.16.3:7788;
+                    meta-disk internal;
+            }
+    }
+
+    drbdadm adjust r0
+    drbdadm primary r0
+
+your `/proc/drbd` should look like
+
+    # cat /proc/drbd 
+    version: 8.3.11 (api:88/proto:86-96)
+    srcversion: 71955441799F513ACA6DA60 
+     0: cs:Connected ro:Primary/Primary ds:UpToDate/UpToDate C r-----
+        ns:12 nr:0 dw:0 dr:676 al:0 bm:2 lo:0 pe:0 ua:0 ap:0 ep:1 wo:f oos:0
+
+### Configure cluster.conf and corosync.conf as such on both nodes 
 
 Edit `/etc/cluster/cluster.conf` to resemble the following
 
@@ -398,10 +414,12 @@ Edit `/etc/corosync/corosync.conf` to resemble the following
 
 For more information about these config files, see man 5 corosync.conf, and man 5 cluster.conf
 
-Start the services on both servers
+Start the services and configure them to run on boot for both servers
 
-    service cman start
-    service pacemaker start
+    # service cman start
+    # service pacemaker start
+    # update-rc.d cman enable
+    # update-rc.d pacemaker enable
 
 Configure some resources and a dummy stonith - we don't want stonith to do anything we aren't expecting it to. Since this is a cluster, we only need to do this on one node.
 
@@ -452,59 +470,17 @@ This may take a while for crm to actuall do its thing; verify that your `crm sta
      Clone Set: fencing [st-null]
          Started: [ drbd0 drbd1 ]
 
-Modify the drbd resource on both servers to look something like this
-
-    resource r0 {
-            protocol C;
-            startup{ become-primary-on both; }
-            net {
-                    cram-hmac-alg sha1;
-                    shared-secret "dupersupersecret";
-                    timeout 180;
-                    ping-int 3;
-                    ping-timeout 9;
-                    allow-two-primaries;
-                    after-sb-0pri discard-zero-changes;
-                    after-sb-1pri discard-secondary;
-                    after-sb-2pri disconnect;
-            }
-            on drbd0 {
-                    device /dev/drbd0;
-                    disk /dev/xvdb1;
-                    address 172.16.16.4:7788;
-                    meta-disk internal;
-            }
-            on drbd1 {
-                    device /dev/drbd0;
-                    disk /dev/xvdf1;
-                    address 172.16.16.3:7788;
-                    meta-disk internal;
-            }
-    }
-
-    drbdadm adjust r0
-    drbdadm primary r0
-
-your `/proc/drbd` should look like
-
-    # cat /proc/drbd 
-    version: 8.3.11 (api:88/proto:86-96)
-    srcversion: 71955441799F513ACA6DA60 
-     0: cs:Connected ro:Primary/Primary ds:UpToDate/UpToDate C r-----
-        ns:12 nr:0 dw:0 dr:676 al:0 bm:2 lo:0 pe:0 ua:0 ap:0 ep:1 wo:f oos:0
-
-
 Make sure `/dev/drbd0` **isn't mounted on either node**, and mkfs.gfs2 on the Primary node
 
-    mkfs.gfs2 -t pacemaker:pcmk -p lock_dlm -j 2 /dev/drbd0
+    drbd0# mkfs.gfs2 -t pacemaker:pcmk -p lock_dlm -j 2 /dev/drbd0
 
 Mount `/dev/drbd0` on both nodes
 
-    mkdir /clustered
-    cat << EOT >> /etc/fstab
+    # mkdir /clustered
+    # cat << EOT >> /etc/fstab
     /dev/drbd0  /clustered  gfs2    noatime 0   0
     EOT
-    mount /clustered
+    # mount /clustered
 
 Enjoy your dual-primary gfs2 backed volume on CBS over Cloud Networks! Now you can have both servers configured to have their webroot in `/clustered` (or wherever you want) and retain uptime when one of the web servers becomes unavailable.
 
@@ -572,14 +548,14 @@ Suppose you don't need cheap, redundant performance; instead you need a highly s
 
 Create two networks that your instances will be attached to - the gluster servers will be attached to both of the following networks, while the web heads will only be attached to one of them
 
-    nova network-create storageManagement 192.168.25.0/24
-    nova network-create storageClients 192.168.50.0/24
+    > nova network-create storageManagement 192.168.25.0/24
+    > nova network-create storageClients 192.168.50.0/24
 
 ### Create some volumes
 
 Create 4 Cloud Block Storage volumes - one for each Gluster server. We'll create them as SSD volumes to get slightly better read-performance out of them.
 
-    for i in 0 1 2 3; do
+    > for i in 0 1 2 3; do
         nova volume-create --display-name glusterbrick${i} --volume-type SSD 100
     done
 
@@ -587,7 +563,7 @@ Create 4 Cloud Block Storage volumes - one for each Gluster server. We'll create
 
 Create 4 servers - the Gluster servers - we'll use CentOS6.3 (found from `nova image-list`) in this case. Below I use the `--file=` option to put my public key in root's authorized_keys file so I don't have to use the passwords returned to me above. I also specify the NICs that should be attached to each instance (found via `nova network-list`). I also specify `--flavor 4` to take advantage of more RAM and CPU. The reason I specify a sleep value is to make sure the nova scheduler has some time to put my instances on very different hypervisors.
 
-    for i in 0 1 2 3; do
+    > for i in 0 1 2 3; do
         nova boot --image c195ef3b-9195-4474-b6f7-16e5bd86acd0 \
         --file /root/.ssh/authorized_keys=/home/niko5420/.ssh/id_rsa.pub \
         --nic net-id=f1331532-12e5-41e6-9bb5-df31758c8bf2 \
@@ -675,7 +651,7 @@ Set the beginning of the disk: `Expert command (m for help): b`
 
 Select partition 1: `Partition number (1-4): 1`
 
-Set the first cylder to 2048: `New beginning of data (1-209712509, default 63): 2048`
+Align to 2048: `New beginning of data (1-209712509, default 63): 2048`
     
 Return to regular mode: `Expert command (m for help): r`
     
@@ -799,11 +775,11 @@ Once they're booted, do the same steps as above to get them updated and using pr
 
     # sed -i.orig 's/GSSAPIAuthentication yes/GSSAPIAuthentication no/g' /etc/ssh/sshd_config
     # service sshd restart
-    #yum update -y && reboot 
-    #rpm -Uvh http://mirror.nexcess.net/epel/6/i386/epel-release-6-8.noarch.rpm
-    #yum update 
-    #yum install -y glusterfs-fuse nginx 
-    #cat << EOT >> /etc/hosts
+    # yum update -y && reboot 
+    # rpm -Uvh http://mirror.nexcess.net/epel/6/i386/epel-release-6-8.noarch.rpm
+    # yum update 
+    # yum install -y glusterfs-fuse nginx 
+    # cat << EOT >> /etc/hosts
     192.168.50.3 gluster-00-servers
     192.168.50.2 gluster-01-servers
     192.168.50.6 gluster-02-servers
@@ -896,6 +872,3 @@ The final test I turned the concurrency up to `-c 50` instead of 30 and let it r
     Shortest transaction:           2.85
 
 Since this particular instance type is limited to 30Mb/s on its public interface, the throughput results of 60Mb/s suggest that I can scale this horizontally to meet demands without taking a moment of downtime.
-
-
-
